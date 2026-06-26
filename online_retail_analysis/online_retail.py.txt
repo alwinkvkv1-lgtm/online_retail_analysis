@@ -1,0 +1,131 @@
+!pip install ucimlrepo
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from ucimlrepo import fetch_ucirepo
+import datetime as dt
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+online_retail = fetch_ucirepo(id=352)
+X = online_retail.data.features
+y = online_retail.data.targets
+
+df = pd.concat([online_retail.data.ids, X, y], axis=1)
+
+print("Original shape:", df.shape)
+
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+
+df = df[~df['InvoiceNo'].astype(str).str.startswith('C')].copy()
+df = df[df['Quantity'] > 0].copy()
+df = df[df['UnitPrice'] > 0].copy()
+
+df = df.dropna()
+
+df['Revenue'] = df['Quantity'] * df['UnitPrice']
+
+print("Cleaned shape:", df.shape)
+
+print("\n--- Basic Statistics ---")
+print(df.describe())
+
+product_sales = df.groupby("Description").agg({
+    'Quantity': 'sum',
+    'Revenue': 'sum'
+}).sort_values(by='Revenue', ascending=False)
+
+print("\nTop 10 Products by Revenue:\n", product_sales.head(10))
+
+country_sales = df.groupby("Country")["Revenue"].sum().sort_values(ascending=False)
+print("\nTop 10 Countries by Revenue:\n", country_sales.head(10))
+
+customer_freq = df.groupby("CustomerID")["InvoiceNo"].nunique().sort_values(ascending=False)
+print("\nTop 10 Customers by Frequency:\n", customer_freq.head(10))
+
+latest_date = df['InvoiceDate'].max() + dt.timedelta(days=1)
+
+rfm = df.groupby('CustomerID').agg({
+    'InvoiceDate': lambda x: (latest_date - x.max()).days,   
+    'InvoiceNo': 'nunique',                                  
+    'Revenue': 'sum'                                         
+}).rename(columns={
+    'InvoiceDate': 'Recency',
+    'InvoiceNo': 'Frequency',
+    'Revenue': 'Monetary'
+})
+
+rfm['R_Score'] = pd.qcut(rfm['Recency'].rank(method='first', ascending=True), 4, labels=[4,3,2,1])
+rfm['F_Score'] = pd.qcut(rfm['Frequency'].rank(method='first', ascending=True), 4, labels=[1,2,3,4])
+rfm['M_Score'] = pd.qcut(rfm['Monetary'].rank(method='first', ascending=True), 4, labels=[1,2,3,4])
+rfm['RFM_Score'] = rfm['R_Score'].astype(str) + rfm['F_Score'].astype(str) + rfm['M_Score'].astype(str)
+
+print("\nRFM Table Head:\n", rfm.head())
+
+
+df['YearMonth'] = df['InvoiceDate'].dt.to_period('M')
+monthly_sales = df.groupby('YearMonth')['Revenue'].sum()
+
+plt.figure(figsize=(12,6))
+monthly_sales.plot(kind='line', marker='o', color='purple')
+plt.title('Monthly Revenue Trend (2010-2011)')
+plt.ylabel('Revenue (£)')
+plt.xlabel('Month')
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.savefig("monthly_revenue_trend.png")
+plt.show()
+
+plt.figure(figsize=(10,6))
+product_sales.head(10)['Revenue'].plot(kind='bar', color='skyblue')
+plt.title('Top 10 Products by Revenue')
+plt.ylabel('Revenue (£)')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.savefig("top_products_revenue.png")
+plt.show()
+
+plt.figure(figsize=(8,6))
+country_sales.head(5).plot(kind='pie', autopct='%1.1f%%', cmap='viridis')
+plt.title('Top 5 Countries by Revenue')
+plt.ylabel('')
+plt.savefig("pie_country_revenue.png")
+plt.show()
+
+plt.figure(figsize=(8,6))
+sns.heatmap(df[["Quantity", "UnitPrice", "Revenue"]].corr(),
+            annot=True, cmap="coolwarm", fmt='.2f')
+plt.title("Correlation Heatmap")
+plt.savefig("heatmap_corr.png")
+plt.show()
+
+features = rfm[['Recency', 'Frequency', 'Monetary']]
+scaler = StandardScaler()
+rfm_scaled = scaler.fit_transform(features)
+
+kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+rfm['Cluster'] = kmeans.fit_predict(rfm_scaled)
+
+pca = PCA(n_components=2)
+rfm_pca = pca.fit_transform(rfm_scaled)
+
+plt.figure(figsize=(10,7))
+scatter = plt.scatter(rfm_pca[:,0], rfm_pca[:,1], c=rfm['Cluster'], cmap='viridis', alpha=0.7)
+plt.title('Customer Segmentation using RFM + KMeans (PCA)')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.colorbar(scatter, label='Cluster')
+plt.savefig("rfm_customer_clusters.png")
+plt.show()
+
+print("\n--- Key Business Insights ---")
+print("1. UK dominates the market, but other countries show good potential.")
+print("2. Monthly revenue shows clear seasonal patterns.")
+print("3. Few products generate most of the revenue (Pareto principle).")
+print("4. RFM Analysis helps identify high-value customers.")
+print("5. Customer segmentation reveals 4 distinct groups for targeted marketing.")
+
+df.to_csv("cleaned_online_retail.csv", index=False)
+rfm.to_csv("rfm_analysis.csv")

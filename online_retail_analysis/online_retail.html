@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Online Retail Store Analysis</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        h1, h2 {{ color: #2c3e50; }}
+        img {{ max-width: 600px; margin: 10px 0; }}
+        table {{ border-collapse: collapse; width: 80%; margin: 20px 0; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; }}
+        th {{ background-color: #f4f4f4; }}
+    </style>
+</head>
+<body>
+    <h1>Online Retail Store Analysis Report</h1>
+    
+    <h2>Top Products</h2>
+    {product_sales.head(10).to_frame().to_html()}
+    
+    <h2>Country-wise Sales</h2>
+    {country_sales.head(10).to_frame().to_html()}
+    
+    <h2>Best Customers</h2>
+    {customer_freq.head(10).to_frame().to_html()}
+    
+    <h2>Visualizations</h2>
+    <img src="histogram_quantity.png" alt="Histogram of Quantity">
+    <img src="pie_country_sales.png" alt="Pie Chart of Country Sales">
+    <img src="heatmap_corr.png" alt="Correlation Heatmap">
+    <img src="pca_clusters.png" alt="PCA Clusters">
+    
+    <h2>Insights</h2>
+    <ul>
+        <li>Best customers are those with highest purchase frequency.</li>
+        <li>Popular products include: {', '.join(product_sales.head(5).index)}.</li>
+        <li>UK dominates sales, but other countries show niche demand.</li>
+        <li>Most transactions are small, with few bulk purchases.</li>
+        <li>Clustering reveals three customer groups: bulk buyers, average buyers, and occasional buyers.</li>
+    </ul>
+</body>
+</html>
